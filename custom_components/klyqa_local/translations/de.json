@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Klyqa-Konto",
+        "description": "Einmalig anmelden, um Geräte und ihre lokalen Schlüssel auszulesen. Das Passwort wird nicht gespeichert; danach wird das Licht rein lokal gesteuert.",
+        "data": {
+          "email": "E-Mail",
+          "password": "Passwort"
+        }
+      },
+      "device": {
+        "title": "Gerät wählen",
+        "data": {
+          "unit_id": "Gerät",
+          "host": "IP-Adresse (optional, beschleunigt die Suche)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "E-Mail oder Passwort falsch",
+      "cannot_connect": "Klyqa-Cloud nicht erreichbar"
+    },
+    "abort": {
+      "no_devices": "Keine (neuen) Geräte mit lokalem Schlüssel in diesem Konto gefunden",
+      "already_configured": "Dieses Gerät ist bereits eingerichtet"
+    }
+  }
+}

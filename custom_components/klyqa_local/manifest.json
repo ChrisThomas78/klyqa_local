@@ -1,0 +1,12 @@
+{
+  "domain": "klyqa_local",
+  "name": "Klyqa Local",
+  "codeowners": ["@ChrisThomas78"],
+  "config_flow": true,
+  "documentation": "https://github.com/ChrisThomas78/klyqa_local",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/ChrisThomas78/klyqa_local/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}
