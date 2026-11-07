@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 from typing import Any
@@ -11,7 +12,13 @@ from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_AES_KEY, CONF_UNIT_ID, DOMAIN, SCAN_INTERVAL_SECONDS
+from .const import (
+    CONF_AES_KEY,
+    CONF_UNIT_ID,
+    DOMAIN,
+    MAX_POLL_FAILURES,
+    SCAN_INTERVAL_SECONDS,
+)
 from .protocol import KlyqaError, KlyqaHub
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +43,7 @@ class KlyqaCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.unit_id: str = entry.data[CONF_UNIT_ID]
         self.host: str | None = entry.data.get(CONF_HOST)
         self._key = bytes.fromhex(entry.data[CONF_AES_KEY])
+        self._failures = 0
 
     async def async_send(self, message: dict[str, Any]) -> dict[str, Any]:
         answer = await self.hub.async_request(self.unit_id, self._key, message, self.host)
@@ -44,12 +52,30 @@ class KlyqaCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return answer
 
     async def _async_update_data(self) -> dict[str, Any]:
-        try:
-            return await self.hub.async_request(
-                self.unit_id, self._key, {"type": "request"}, self.host
+        last_err: KlyqaError | None = None
+        for attempt in range(2):
+            try:
+                data = await self.hub.async_request(
+                    self.unit_id, self._key, {"type": "request"}, self.host
+                )
+            except KlyqaError as err:
+                last_err = err
+                if attempt == 0:
+                    await asyncio.sleep(2)
+                continue
+            self._failures = 0
+            return data
+
+        # Wi-Fi devices drop single connections now and then (ESP power save);
+        # keep the last known state until several polls in a row have failed.
+        self._failures += 1
+        if self.data is not None and self._failures < MAX_POLL_FAILURES:
+            _LOGGER.debug(
+                "Poll of %s failed (%s/%s), keeping last state: %s",
+                self.unit_id, self._failures, MAX_POLL_FAILURES, last_err,
             )
-        except KlyqaError as err:
-            raise UpdateFailed(str(err)) from err
+            return self.data
+        raise UpdateFailed(str(last_err)) from last_err
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: KlyqaConfigEntry) -> bool:

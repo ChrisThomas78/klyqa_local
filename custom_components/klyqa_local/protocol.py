@@ -18,7 +18,7 @@ from typing import Any
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from .const import REQUEST_TIMEOUT, TCP_PORT, UDP_PORT
+from .const import REQUEST_TIMEOUT, SYN_RETRY_SECONDS, TCP_PORT, UDP_PORT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,14 +88,21 @@ class KlyqaHub:
             self._waiters[unit_id] = waiter
             try:
                 deadline = loop.time() + REQUEST_TIMEOUT
+                attempt = 0
                 while not waiter.done():
                     if loop.time() > deadline:
                         raise KlyqaError(f"device {unit_id} did not connect back")
                     if self._udp:
-                        if host:
-                            self._udp.sendto(b"QCX-SYN", (host, UDP_PORT))
-                        self._udp.sendto(b"QCX-SYN", ("255.255.255.255", UDP_PORT))
-                    await asyncio.wait({waiter}, timeout=1)
+                        # One SYN at a time: every SYN makes the device open a new
+                        # TCP connection and drop the one in progress. Prefer the
+                        # known host; fall back to broadcast on every 2nd retry.
+                        if host and attempt % 2 == 0:
+                            target = host
+                        else:
+                            target = "255.255.255.255"
+                        self._udp.sendto(b"QCX-SYN", (target, UDP_PORT))
+                    attempt += 1
+                    await asyncio.wait({waiter}, timeout=SYN_RETRY_SECONDS)
                 reader, writer, _ident = waiter.result()
             finally:
                 self._waiters.pop(unit_id, None)
